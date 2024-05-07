@@ -1,0 +1,68 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cola-admin-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: cola-admin
+    namespace: kube-system
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cola-admin
+  namespace: kube-system
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cola-manager
+  namespace: kube-system
+spec:
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      name: cola
+  template:
+    metadata:
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ""
+      labels:
+        name: cola
+    spec:
+      serviceAccount: cola-admin
+      containers:
+        - name: cola-manager
+          image: sample-device-plugin:v0.0.1   ### ### harbor/project/sample-device-plugin:v0.0.1
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+            - name: devices
+              mountPath: /etc/colas
+      nodeSelector:
+        cola-device: enable
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - key: myway5.com/cola
+          operator: Exists
+          effect: NoSchedule
+      priorityClassName: "system-node-critical"
+      hostPID: true
+      volumes:
+      - name: device-plugin
+        hostPath:
+          type: Directory
+          path: /var/lib/kubelet/device-plugins
+      - name: devices
+        hostPath:
+          type: Directory
+          path: /etc/colas
